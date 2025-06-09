@@ -127,6 +127,8 @@ def cmd_start(m):
     for cat in prices:
         kb.add(f"🛍 Купить: {cat} ({prices[cat]}₽)", f"📅 Подписка: {cat} ({sub_prices[cat]}₽/мес)")
     if m.from_user.id == ADMIN_ID:
+        for cat in prices:
+            kb.add(f"🎁 Админ-ключ: {cat}", f"🎫 Админ-подписка: {cat}")
         kb.add("🔄 Обновить ключи", "📦 Остатки")
     text = (
         "👋 Привет! Я бот-магазин цифровых ключей:\n\n"
@@ -176,6 +178,22 @@ def cmd_update(m):
 def cmd_stock(m):
     txt = "📦 Остатки ключей:\n" + "\n".join(f"{c}: {len(goods.get(c,[]))}" for c in goods)
     bot.send_message(m.chat.id, txt)
+
+@bot.message_handler(func=lambda m: m.text and m.text.startswith("🎁 Админ-ключ: ") and m.from_user.id == ADMIN_ID)
+def admin_get_key(m):
+    cat = m.text.split(": ")[1]
+    if not goods.get(cat):
+        return bot.reply_to(m, "❌ Сейчас нет ключей в наличии.")
+    key = goods[cat].pop(0)
+    save_goods()
+    bot.send_message(m.chat.id, f"🛠 Ваш ключ ({cat}):\n`{key}`", parse_mode="Markdown")
+
+@bot.message_handler(func=lambda m: m.text and m.text.startswith("🎫 Админ-подписка: ") and m.from_user.id == ADMIN_ID)
+def admin_subscribe(m):
+    cat = m.text.split(": ")[1]
+    subscriptions.setdefault(str(m.from_user.id), {})[cat] = {"last_time": time.time()}
+    save_subscriptions()
+    bot.send_message(m.chat.id, f"🛠 Подписка на {cat} активирована (бесплатно).")
 
 # 🔁 Проверка платежей
 def check_payments():
