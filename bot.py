@@ -7,6 +7,7 @@ import threading
 import uuid
 from telebot import types
 from datetime import datetime
+import re
 
 # 🔑 Токен, админ, username
 TOKEN = "7584995126:AAFY5RMpeJW2pJzSy2ul6uaSslB5Jnyhxh4"
@@ -17,15 +18,16 @@ bot = telebot.TeleBot(TOKEN)
 goods_file = "goods.json"
 subs_file = "subscriptions.json"
 
-# 🔗 Источники
+# 🔗 Источники (Пункт 4 — обновлено)
 sources = {
     "VPN": [
+        "https://openproxylist.com/",
+        "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt",
         "https://raw.githubusercontent.com/dan1471/FREE-VPN/main/vpn.txt",
         "https://outlinekeys.com/api/vpn",
         "https://openkeys.net/api/vpn"
     ],
     "VPN Premium": [
-        "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt",
         "https://outlinekeys.com/api/premium",
         "https://openkeys.net/api/premium"
     ],
@@ -62,15 +64,16 @@ def save_subscriptions():
     with open(subs_file, "w", encoding="utf-8") as f:
         json.dump(subscriptions, f, ensure_ascii=False, indent=2)
 
-# 🧼 Фильтрация
-def is_valid_key(line):
+# 🧼 Фильтрация (Пункт 3 — новая функция фильтрации по категории)
+def is_valid_key(cat, line):
     line = line.strip()
-    if len(line) > 200:
+    if any(tag in line.lower() for tag in ["<html", "<!doctype", "</body", "</head", "<script", "error", "not found"]):
         return False
-    bad = ["<html", "<!doctype", "404", "not found", "error", "<script", "apache", "server", "nginx"]
-    return not any(x in line.lower() for x in bad)
+    if cat == "GPT":
+        return bool(re.match(r"^sk-[A-Za-z0-9]{20,}$", line))
+    return bool(re.match(r"^[A-Za-z0-9.\-_:@]{20,}$", line))
 
-# 🔄 Обновление
+# 🔄 Обновление (Пункт 5 — обновлена логика по категориям)
 def update_keys():
     updated = {}
     for cat, urls in sources.items():
@@ -80,11 +83,12 @@ def update_keys():
                 r = requests.get(url, timeout=10)
                 for line in r.text.splitlines():
                     k = line.strip()
-                    if is_valid_key(k) and k not in goods[cat]:
+                    if is_valid_key(cat, k) and k not in goods[cat] and k not in new_keys:
                         new_keys.append(k)
             except Exception as e:
                 print(f"Ошибка при загрузке из {url}: {e}")
         goods[cat].extend(new_keys)
+        goods[cat] = list(set(goods[cat]))
         updated[cat] = len(new_keys)
     save_goods()
     return updated
